@@ -26,21 +26,34 @@ export async function POST(req: NextRequest) {
 
     const subscription = await getStripe().subscriptions.retrieve(session.subscription as string);
 
-    // Look up user_id from existing subscriptions row (written at checkout session creation)
+    // Look up user_id — first by customer_id in subscriptions, then by email
+    let userId: string | null = null;
+
     const { data: existingSub } = await supabase
       .from("subscriptions")
       .select("user_id")
       .eq("stripe_customer_id", session.customer as string)
       .single();
 
-    if (!existingSub?.user_id) return NextResponse.json({ error: "User not found" }, { status: 400 });
+    if (existingSub?.user_id) {
+      userId = existingSub.user_id;
+    } else {
+      const email = (session as any).customer_details?.email as string | undefined;
+      if (email) {
+        const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        const match = users.find((u) => u.email === email);
+        if (match) userId = match.id;
+      }
+    }
+
+    if (!userId) return NextResponse.json({ error: "User not found" }, { status: 400 });
 
     const periodEnd = (subscription as any).current_period_end
       ? new Date((subscription as any).current_period_end * 1000).toISOString()
       : null;
 
     await supabase.from("subscriptions").upsert({
-      user_id: existingSub.user_id,
+      user_id: userId,
       stripe_customer_id: session.customer as string,
       stripe_subscription_id: subscription.id,
       status: "active",
