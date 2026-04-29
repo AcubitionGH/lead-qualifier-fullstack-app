@@ -19,6 +19,12 @@ export type QualificationResult = {
   recommendedAction: string;
 };
 
+export type UsageStatus = {
+  isPro: boolean;
+  usageToday: number;
+  limit: number;
+};
+
 // Row shape returned from Supabase (snake_case columns)
 export type SavedLead = {
   id: string;

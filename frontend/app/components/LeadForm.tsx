@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import type { LeadInput, QualificationResult } from "@/lib/types";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import type { LeadInput, QualificationResult, UsageStatus } from "@/lib/types";
 import QualificationResultComponent from "./QualificationResult";
 
 const COMPANY_SIZES = ["1-10", "11-50", "51-200", "201-500", "500+"] as const;
+const FREE_LIMIT = 2;
 
 type View = "form" | "loading" | "result";
 
@@ -14,6 +16,8 @@ const inputClass =
 const labelClass = "text-xs font-medium text-[#8b949e] uppercase tracking-wide";
 
 export default function LeadForm() {
+  const router = useRouter();
+  const [usage, setUsage] = useState<UsageStatus | null>(null);
   const [form, setForm] = useState<LeadInput>({
     companyName: "",
     website: "",
@@ -28,6 +32,10 @@ export default function LeadForm() {
   const [result, setResult] = useState<QualificationResult | null>(null);
   const [view, setView] = useState<View>("form");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/usage").then((r) => r.json()).then(setUsage).catch(() => null);
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value || undefined }));
@@ -45,6 +53,12 @@ export default function LeadForm() {
         body: JSON.stringify(form),
       });
 
+      if (res.status === 402) {
+        setView("form");
+        router.push("/pricing");
+        return;
+      }
+
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error ?? "Something went wrong");
@@ -52,6 +66,8 @@ export default function LeadForm() {
 
       setResult(await res.json());
       setView("result");
+      // Refresh usage after successful qualification
+      fetch("/api/usage").then((r) => r.json()).then(setUsage).catch(() => null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
       setView("form");
@@ -84,7 +100,23 @@ export default function LeadForm() {
           onSubmit={handleSubmit}
           className="bg-[#161b22] rounded-2xl border border-[#30363d] p-8 space-y-5 shadow-xl shadow-black/40"
         >
-          <h2 className="text-base font-semibold text-[#e6edf3]">Lead Information</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-[#e6edf3]">Lead Information</h2>
+            {usage && !usage.isPro && (
+              <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+                usage.usageToday >= FREE_LIMIT
+                  ? "bg-amber-950/30 border-amber-800/40 text-amber-400"
+                  : "bg-[#0d1117] border-[#30363d] text-[#8b949e]"
+              }`}>
+                {usage.usageToday} / {FREE_LIMIT} today
+              </span>
+            )}
+            {usage?.isPro && (
+              <span className="text-xs px-2.5 py-1 rounded-full border bg-[#0d1117] border-[#1d6dd4] text-[#58a6ff] font-medium">
+                Pro
+              </span>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Company Name *" name="companyName" value={form.companyName} onChange={handleChange} required />
@@ -140,12 +172,22 @@ export default function LeadForm() {
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full bg-[#1d6dd4] hover:bg-[#1f7aec] active:scale-[0.98] text-white font-semibold py-3 rounded-lg transition-all duration-150 shadow-lg shadow-[#1d6dd4]/20 hover:shadow-[#1d6dd4]/40 mt-2"
-          >
-            Analyze Lead
-          </button>
+          {usage && !usage.isPro && usage.usageToday >= FREE_LIMIT ? (
+            <button
+              type="button"
+              onClick={() => router.push("/pricing")}
+              className="w-full bg-amber-600 hover:bg-amber-500 text-white font-semibold py-3 rounded-lg transition-all duration-150 mt-2"
+            >
+              Upgrade to Analyze More Leads
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="w-full bg-[#1d6dd4] hover:bg-[#1f7aec] active:scale-[0.98] text-white font-semibold py-3 rounded-lg transition-all duration-150 shadow-lg shadow-[#1d6dd4]/20 hover:shadow-[#1d6dd4]/40 mt-2"
+            >
+              Analyze Lead
+            </button>
+          )}
 
           {error && (
             <p className="text-red-400 text-sm text-center bg-red-950/30 border border-red-900/40 rounded-lg py-2 px-3">

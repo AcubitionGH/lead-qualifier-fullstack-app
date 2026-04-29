@@ -27,13 +27,23 @@ export default async function RootLayout({
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  let isPro = false;
+  if (user) {
+    const { data: sub } = await supabase
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", user.id)
+      .single();
+    isPro = sub?.status === "active";
+  }
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#0d1117]">
-        {user && <Navbar email={user.email ?? ""} />}
+        {user && <Navbar email={user.email ?? ""} isPro={isPro} />}
         {children}
       </body>
     </html>

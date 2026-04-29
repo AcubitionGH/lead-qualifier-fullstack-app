@@ -13,6 +13,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Check subscription and enforce free tier daily limit
+  const { data: sub } = await supabaseCheck
+    .from("subscriptions")
+    .select("status")
+    .eq("user_id", authUser.id)
+    .single();
+
+  const isPro = sub?.status === "active";
+
+  if (!isPro) {
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const { count } = await supabaseCheck
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", authUser.id)
+      .gte("created_at", todayStart.toISOString());
+
+    if ((count ?? 0) >= 2) {
+      return NextResponse.json({ error: "FREE_LIMIT_REACHED" }, { status: 402 });
+    }
+  }
+
   const body: LeadInput = await req.json();
 
   if (!body.companyName || !body.contactName || !body.contactEmail) {

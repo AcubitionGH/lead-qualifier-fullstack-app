@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 
-export default function Navbar({ email }: { email: string }) {
+export default function Navbar({ email, isPro }: { email: string; isPro: boolean }) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -26,8 +26,19 @@ export default function Navbar({ email }: { email: string }) {
         >
           History
         </Link>
+        <Link
+          href="/pricing"
+          className="text-[#8b949e] text-sm hover:text-[#e6edf3] transition-colors"
+        >
+          Pricing
+        </Link>
       </div>
       <div className="flex items-center gap-4">
+        {isPro && (
+          <span className="text-xs px-2 py-0.5 rounded-full border border-[#1d6dd4] text-[#58a6ff] font-medium hidden sm:inline">
+            Pro
+          </span>
+        )}
         <span className="text-[#484f58] text-xs hidden sm:block">{email}</span>
         <button
           onClick={handleSignOut}
