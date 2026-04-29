@@ -6,6 +6,13 @@ import type { LeadInput, QualificationResult } from "@/lib/types";
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
+  // Require authenticated session
+  const supabaseCheck = await createClient();
+  const { data: { user: authUser } } = await supabaseCheck.auth.getUser();
+  if (!authUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body: LeadInput = await req.json();
 
   if (!body.companyName || !body.contactName || !body.contactEmail) {
