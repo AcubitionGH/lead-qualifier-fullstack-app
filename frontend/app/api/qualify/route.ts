@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { tasks, runs } from "@trigger.dev/sdk/v3";
+import { createClient } from "@/lib/supabase-server";
 import type { LeadInput, QualificationResult } from "@/lib/types";
 
-// Allow up to 120s for the AI task to complete
 export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
@@ -12,13 +12,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  // Strip empty strings so optional fields don't fail URL/format validation
   const payload = Object.fromEntries(
     Object.entries(body).filter(([, v]) => v !== "" && v !== null && v !== undefined)
   ) as LeadInput;
 
   const handle = await tasks.trigger("qualify-lead", payload);
-
   const run = await runs.poll(handle, { pollIntervalMs: 2000 });
 
   if (run.status !== "COMPLETED") {
@@ -28,5 +26,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  return NextResponse.json(run.output as QualificationResult);
+  const result = run.output as QualificationResult;
+
+  // Save to Supabase (non-blocking — don't fail if save fails)
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from("leads").insert({
+        user_id: user.id,
+        company_name: payload.companyName,
+        contact_name: payload.contactName,
+        contact_email: payload.contactEmail,
+        website: payload.website ?? null,
+        job_title: payload.jobTitle ?? null,
+        company_size: payload.companySize ?? null,
+        industry: payload.industry ?? null,
+        use_case: payload.useCase ?? null,
+        notes: payload.notes ?? null,
+        score: result.score,
+        tier: result.tier,
+        summary: result.summary,
+        strengths: result.strengths,
+        concerns: result.concerns,
+        recommended_action: result.recommendedAction,
+      });
+    }
+  } catch {
+    // Silently ignore — result is still returned
+  }
+
+  return NextResponse.json(result);
 }

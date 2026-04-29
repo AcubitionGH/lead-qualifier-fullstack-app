@@ -18,3 +18,25 @@ export type QualificationResult = {
   concerns: string[];
   recommendedAction: string;
 };
+
+// Row shape returned from Supabase (snake_case columns)
+export type SavedLead = {
+  id: string;
+  user_id: string;
+  created_at: string;
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  website: string | null;
+  job_title: string | null;
+  company_size: string | null;
+  industry: string | null;
+  use_case: string | null;
+  notes: string | null;
+  score: number;
+  tier: "hot" | "warm" | "cold" | "disqualified";
+  summary: string;
+  strengths: string[];
+  concerns: string[];
+  recommended_action: string;
+};
