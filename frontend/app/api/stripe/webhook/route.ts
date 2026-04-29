@@ -25,25 +25,42 @@ export async function POST(req: NextRequest) {
     if (session.mode !== "subscription" || !session.subscription) return NextResponse.json({ ok: true });
 
     const subscription = await getStripe().subscriptions.retrieve(session.subscription as string);
-    const userId = subscription.metadata?.user_id ?? session.metadata?.user_id;
+
+    // Look up user_id from existing subscriptions row (written at checkout session creation)
+    const { data: existingSub } = await supabase
+      .from("subscriptions")
+      .select("user_id")
+      .eq("stripe_customer_id", session.customer as string)
+      .single();
+
+    if (!existingSub?.user_id) return NextResponse.json({ error: "User not found" }, { status: 400 });
+
+    const periodEnd = (subscription as any).current_period_end
+      ? new Date((subscription as any).current_period_end * 1000).toISOString()
+      : null;
 
     await supabase.from("subscriptions").upsert({
-      user_id: userId,
+      user_id: existingSub.user_id,
       stripe_customer_id: session.customer as string,
       stripe_subscription_id: subscription.id,
       status: "active",
-      current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+      current_period_end: periodEnd,
     });
   }
 
   if (event.type === "customer.subscription.updated") {
     const subscription = event.data.object as Stripe.Subscription;
     const status = subscription.status === "active" ? "active" : "canceled";
+
+    const periodEnd = (subscription as any).current_period_end
+      ? new Date((subscription as any).current_period_end * 1000).toISOString()
+      : null;
+
     await supabase.from("subscriptions")
       .update({
         status,
         stripe_subscription_id: subscription.id,
-        current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+        current_period_end: periodEnd,
       })
       .eq("stripe_customer_id", subscription.customer as string);
   }
